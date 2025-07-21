@@ -56,13 +56,51 @@ bool isPaused = false;
 // Touch data
 touch_data_t touch_data;
 
-// App state management
+// Phone Interface App System
 enum AppState {
   HOME_SCREEN,
-  PLAYING_ALIEN_EYE,
-  PLAYING_CHEETAH
+  FACEBOOK_APP,
+  SCIFI_VIDEO_APP,
+  ANIMAL_VIDEO_APP,
+  ACTION_VIDEO_APP
 };
+
+enum AppType {
+  STATIC_IMAGE_APP,
+  VIDEO_PLAYER_APP
+};
+
+struct App {
+  const char* name;
+  const char* iconPath;
+  AppState appState;
+  AppType appType;
+  const char* staticImagePath;  // For static image apps
+  const char* startVideoKeyword; // For video apps
+  const char* videoKeywords[8]; // For video app playlists
+  int videoKeywordCount;
+};
+
+// App definitions (2x2 grid layout)
+App apps[4] = {
+  // Top-left: Facebook
+  {"Facebook", "/logos/facebook.jpg", FACEBOOK_APP, STATIC_IMAGE_APP, "/facebook-app.jpg", nullptr, {}, 0},
+  
+  // Top-right: Sci-Fi Videos  
+  {"Sci-Fi", "/logos/scifi.jpg", SCIFI_VIDEO_APP, VIDEO_PLAYER_APP, nullptr, "alien_eye", 
+   {"alien", "death_star", "starfighter", "nova", "universe", "human_scan", "human_xray", "dna_helix"}, 8},
+  
+  // Bottom-left: Animal Videos
+  {"Animals", "/logos/animal.jpg", ANIMAL_VIDEO_APP, VIDEO_PLAYER_APP, nullptr, "catmeow",
+   {"catmeow", "cheetah", "turtle", "human_eye", "falls", "river", "earth_spin"}, 7},
+   
+  // Bottom-right: Action Videos (or future game)
+  {"Action", "/logos/action.jpg", ACTION_VIDEO_APP, VIDEO_PLAYER_APP, nullptr, "gundam",
+   {"gundam", "winston", "circuit", "control_room", "rebel_base"}, 5}
+};
+
 AppState currentState = HOME_SCREEN;
+int currentAppIndex = -1;
 
 // JPEG drawing callback for home screen image
 
@@ -230,58 +268,129 @@ int jpegDrawCallbackHomeScreen(JPEGDRAW *pDraw)
     return 1;
 }
 
-// Load and display home screen with image and buttons
+// Phone-style home screen using pre-designed composite image
 void showHomeScreen()
 {
     gfx->fillScreen(RGB565_BLACK);
     
-    // Try to load and display the image from SD card using proper Arduino_GFX method
-    File imageFile = SD.open("/images/image_1.jpg", "r");
-    if (imageFile) {
-        Serial.println("Loading home screen image...");
-        imageFile.close();
-        
-        // Use the jpegDraw function from JpegFunc.h (proper Arduino_GFX way)
-        jpegDraw("/images/image_1.jpg", jpegDrawCallbackHomeScreen, true /* useBigEndian */,
-                0 /* x */, 30 /* y */, gfx->width() /* widthLimit */, gfx->height() - 140 /* heightLimit */);
+    // Use the pre-designed app select screen with background and icons
+    File appSelectFile = SD.open("/images/app-select-screen.jpg", "r");
+    if (appSelectFile) {
+        appSelectFile.close();
+        Serial.println("Loading app select screen...");
+        // Display the complete app select screen
+        jpegDraw("/images/app-select-screen.jpg", jpegDrawCallbackHomeScreen, true,
+                0, 0, gfx->width(), gfx->height());
     } else {
-        Serial.println("Image file not found, showing text-only home screen");
-        // Fallback to text-only home screen
-        gfx->setTextColor(RGB565_WHITE);
-        gfx->setTextSize(2);
-        gfx->setCursor(20, 80);
-        gfx->println("Video Player");
+        Serial.println("App select screen not found, using fallback");
+        // Fallback to generated interface
+        drawAppIconsFallback();
     }
-    
-    // Draw button areas with labels
-    drawHomeScreenButtons();
 }
 
-void drawHomeScreenButtons()
+// Fallback interface if app-select-screen.jpg is not found
+void drawAppIconsFallback()
 {
-    // Draw top button area (Alien Eye)
-    gfx->drawRect(10, 10, gfx->width() - 20, 60, RGB565_GREEN);
-    gfx->setTextColor(RGB565_GREEN);
-    gfx->setTextSize(1);
-    gfx->setCursor(15, 25);
-    gfx->println("TAP TOP: Alien Eye");
-    gfx->setCursor(15, 40);
-    gfx->println("(Sci-Fi Videos)");
+    gfx->fillScreen(RGB565_BLACK);
     
-    // Draw bottom button area (Cheetah)
-    gfx->drawRect(10, gfx->height() - 70, gfx->width() - 20, 60, RGB565_YELLOW);
-    gfx->setTextColor(RGB565_YELLOW);
-    gfx->setCursor(15, gfx->height() - 55);
-    gfx->println("TAP BOTTOM: Cheetah");
-    gfx->setCursor(15, gfx->height() - 40);
-    gfx->println("(Animal Videos)");
+    // Try to show background image first  
+    File wallpaperFile = SD.open("/images/image_1.jpg", "r");
+    if (wallpaperFile) {
+        wallpaperFile.close();
+        Serial.println("Loading background wallpaper...");
+        jpegDraw("/images/image_1.jpg", jpegDrawCallbackHomeScreen, true,
+                0, 0, gfx->width(), gfx->height());
+        // Add semi-transparent overlay for better icon visibility
+        for (int y = 0; y < gfx->height(); y += 4) {
+            for (int x = 0; x < gfx->width(); x += 4) {
+                gfx->drawPixel(x, y, RGB565_BLACK);
+            }
+        }
+    }
     
-    // Instructions in middle
+    // 2x2 Grid layout for 4 apps
+    // Screen: 172x320, Grid: 86x160 per quadrant
+    
+    int iconSize = 60;
+    int gridWidth = gfx->width() / 2;
+    int gridHeight = (gfx->height() - 40) / 2; // Leave space at top and bottom
+    
+    for (int i = 0; i < 4; i++) {
+        int gridX = i % 2;  // 0 or 1 (left/right)
+        int gridY = i / 2;  // 0 or 1 (top/bottom)
+        
+        int iconX = gridX * gridWidth + (gridWidth - iconSize) / 2;
+        int iconY = 40 + gridY * gridHeight + (gridHeight - iconSize - 20) / 2; // 20 for text
+        
+        // Try to load individual app icon
+        File iconFile = SD.open(apps[i].iconPath, "r");
+        if (iconFile) {
+            iconFile.close();
+            Serial.printf("Loading icon: %s\n", apps[i].iconPath);
+            jpegDraw(apps[i].iconPath, jpegDrawCallbackHomeScreen, true,
+                    iconX, iconY, iconSize, iconSize);
+        } else {
+            // Fallback: Draw colored rectangle with app initial
+            uint16_t appColors[] = {RGB565_BLUE, RGB565_RED, RGB565_GREEN, RGB565_ORANGE};
+            gfx->fillRoundRect(iconX, iconY, iconSize, iconSize, 8, appColors[i]);
+            gfx->setTextColor(RGB565_WHITE);
+            gfx->setTextSize(3);
+            gfx->setCursor(iconX + iconSize/2 - 9, iconY + iconSize/2 - 12);
+            gfx->print(apps[i].name[0]); // First letter of app name
+        }
+        
+        // Draw app name below icon
+        gfx->setTextColor(RGB565_WHITE);
+        gfx->setTextSize(1);
+        int textWidth = strlen(apps[i].name) * 6; // Approximate text width
+        int textX = gridX * gridWidth + (gridWidth - textWidth) / 2;
+        int textY = iconY + iconSize + 5;
+        gfx->setCursor(textX, textY);
+        gfx->println(apps[i].name);
+    }
+    
+    // Title at top
     gfx->setTextColor(RGB565_WHITE);
-    gfx->setCursor(20, gfx->height()/2 + 40);
-    gfx->println("Touch screen areas");
-    gfx->setCursor(20, gfx->height()/2 + 55);
-    gfx->println("to select videos");
+    gfx->setTextSize(1);
+    gfx->setCursor(10, 10);
+    gfx->println("ESP32 Phone Interface");
+}
+
+void showStaticImageApp(int appIndex)
+{
+    gfx->fillScreen(RGB565_BLACK);
+    
+    // Show return instruction at top
+    gfx->setTextColor(RGB565_WHITE);
+    gfx->setTextSize(1);
+    gfx->setCursor(5, 5);
+    gfx->println("< Touch top to return");
+    
+    // Display the static image
+    File imageFile = SD.open(apps[appIndex].staticImagePath, "r");
+    if (imageFile) {
+        imageFile.close();
+        Serial.printf("Loading static image: %s\n", apps[appIndex].staticImagePath);
+        jpegDraw(apps[appIndex].staticImagePath, jpegDrawCallbackHomeScreen, true,
+                0, 25, gfx->width(), gfx->height() - 25);
+    } else {
+        // Fallback display
+        gfx->fillRect(10, 30, gfx->width() - 20, gfx->height() - 60, RGB565_BLUE);
+        gfx->setTextColor(RGB565_WHITE);
+        gfx->setTextSize(2);
+        int textX = (gfx->width() - strlen(apps[appIndex].name) * 12) / 2;
+        gfx->setCursor(textX, gfx->height()/2 - 20);
+        gfx->println(apps[appIndex].name);
+        
+        gfx->setTextSize(1);
+        gfx->setCursor(20, gfx->height()/2 + 10);
+        gfx->println("Image not found:");
+        gfx->setCursor(20, gfx->height()/2 + 25);
+        gfx->println(apps[appIndex].staticImagePath);
+        
+        gfx->setCursor(20, gfx->height() - 40);
+        gfx->println("Touch anywhere to return");
+    }
 }
 
 void displayTouchControls()
@@ -316,31 +425,63 @@ void checkTouch()
             Serial.printf("Touch detected at: x=%d, y=%d\n", touchX, touchY);
             
             if (currentState == HOME_SCREEN) {
-                // Check which button was pressed
-                if (touchY <= 70) {
-                    // Top button - Alien Eye videos
-                    Serial.println("Starting Alien Eye videos");
-                    currentState = PLAYING_ALIEN_EYE;
-                    currentMjpegIndex = findVideoIndex("alien_eye.mjpeg");
-                } else if (touchY >= gfx->height() - 70) {
-                    // Bottom button - Cheetah videos  
-                    Serial.println("Starting Cheetah videos");
-                    currentState = PLAYING_CHEETAH;
-                    currentMjpegIndex = findVideoIndex("catmeow.mjpeg");
+                // Detect which app was touched (2x2 grid)
+                int gridX = (touchX < gfx->width() / 2) ? 0 : 1;
+                int gridY = (touchY < gfx->height() / 2) ? 0 : 1;
+                int appIndex = gridY * 2 + gridX;
+                
+                if (appIndex >= 0 && appIndex < 4) {
+                    launchApp(appIndex);
                 }
             } else {
-                // During video playback - skip to next or return to home
-                if (touchY <= 50) {
+                // In an app - check for return to home or app-specific actions
+                if (touchY <= 30) {
                     // Top area - return to home screen
                     Serial.println("Returning to home screen");
-                    currentState = HOME_SCREEN;
-                    skipRequested = true;
+                    returnToHome();
                 } else {
-                    // Rest of screen - skip to next video
-                    skipRequested = true;
+                    // App-specific touch handling
+                    handleAppTouch(touchX, touchY);
                 }
             }
             lastTouch = now;
+        }
+    }
+}
+
+void launchApp(int appIndex)
+{
+    Serial.printf("Launching app: %s\n", apps[appIndex].name);
+    currentAppIndex = appIndex;
+    currentState = apps[appIndex].appState;
+    
+    if (apps[appIndex].appType == STATIC_IMAGE_APP) {
+        // Launch static image app (like Facebook)
+        showStaticImageApp(appIndex);
+    } else if (apps[appIndex].appType == VIDEO_PLAYER_APP) {
+        // Launch video player app
+        currentMjpegIndex = findVideoIndex(apps[appIndex].startVideoKeyword);
+        Serial.printf("Starting video app with: %s\n", apps[appIndex].startVideoKeyword);
+    }
+}
+
+void returnToHome()
+{
+    currentState = HOME_SCREEN;
+    currentAppIndex = -1;
+    skipRequested = true; // Stop any video playback
+    showHomeScreen();
+}
+
+void handleAppTouch(int touchX, int touchY)
+{
+    if (currentAppIndex >= 0) {
+        if (apps[currentAppIndex].appType == STATIC_IMAGE_APP) {
+            // For static image apps, any touch returns to home
+            returnToHome();
+        } else if (apps[currentAppIndex].appType == VIDEO_PLAYER_APP) {
+            // For video apps, skip to next video
+            skipRequested = true;
         }
     }
 }
@@ -356,64 +497,47 @@ int findVideoIndex(const char* filename)
     return 0; // Default to first video if not found
 }
 
-// Get next video index based on current mode
+// Get next video index based on current app
 int getNextVideoIndex(int currentIndex)
 {
     Serial.printf("Getting next video from index %d (current: %s)\n", currentIndex, mjpegFileList[currentIndex].c_str());
-    if (currentState == PLAYING_ALIEN_EYE) {
-        // Try to find next sci-fi themed video
-        const char* scifiVideos[] = {"alien", "death_star", "starfighter", "nova", "universe", "human_scan", "human_xray", "dna_helix"};
-        int scifiCount = sizeof(scifiVideos) / sizeof(scifiVideos[0]);
-        
-        // First, search from current position + 1 to end
-        for (int i = currentIndex + 1; i < mjpegCount; i++) {
-            for (int j = 0; j < scifiCount; j++) {
-                if (mjpegFileList[i].indexOf(scifiVideos[j]) >= 0) {
-                    return i;
-                }
-            }
-        }
-        // If not found, search from beginning to current position
-        for (int i = 0; i < currentIndex; i++) {
-            for (int j = 0; j < scifiCount; j++) {
-                if (mjpegFileList[i].indexOf(scifiVideos[j]) >= 0) {
-                    return i;
-                }
-            }
-        }
-        // Fallback to alien_eye if nothing found
-        return findVideoIndex("alien_eye.mjpeg");
-        
-    } else if (currentState == PLAYING_CHEETAH) {
-        // Try to find next animal/nature themed video
-        const char* animalVideos[] = {"catmeow", "cheetah", "turtle", "human_eye", "falls", "river", "earth_spin"};
-        int animalCount = sizeof(animalVideos) / sizeof(animalVideos[0]);
-        
-        // First, search from current position + 1 to end
-        for (int i = currentIndex + 1; i < mjpegCount; i++) {
-            for (int j = 0; j < animalCount; j++) {
-                if (mjpegFileList[i].indexOf(animalVideos[j]) >= 0) {
-                    Serial.printf("Found next animal video: %s at index %d\n", mjpegFileList[i].c_str(), i);
-                    return i;
-                }
-            }
-        }
-        // If not found, search from beginning to current position
-        for (int i = 0; i < currentIndex; i++) {
-            for (int j = 0; j < animalCount; j++) {
-                if (mjpegFileList[i].indexOf(animalVideos[j]) >= 0) {
-                    Serial.printf("Found wrap-around animal video: %s at index %d\n", mjpegFileList[i].c_str(), i);
-                    return i;
-                }
-            }
-        }
-        // Fallback to catmeow if nothing found
-        Serial.println("No other animal videos found, returning to catmeow");
-        return findVideoIndex("catmeow.mjpeg");
+    
+    // Find current app
+    if (currentAppIndex < 0 || currentAppIndex >= 4) {
+        Serial.println("Invalid app index, using default progression");
+        return (currentIndex + 1) % mjpegCount;
     }
     
-    // Default progression
-    return (currentIndex + 1) % mjpegCount;
+    App* currentApp = &apps[currentAppIndex];
+    if (currentApp->appType != VIDEO_PLAYER_APP) {
+        Serial.println("Current app is not a video player");
+        return currentIndex;
+    }
+    
+    // Search for next video matching this app's keywords
+    // First, search from current position + 1 to end
+    for (int i = currentIndex + 1; i < mjpegCount; i++) {
+        for (int j = 0; j < currentApp->videoKeywordCount; j++) {
+            if (mjpegFileList[i].indexOf(currentApp->videoKeywords[j]) >= 0) {
+                Serial.printf("Found next themed video: %s at index %d\n", mjpegFileList[i].c_str(), i);
+                return i;
+            }
+        }
+    }
+    
+    // If not found, search from beginning to current position (wrap around)
+    for (int i = 0; i < currentIndex; i++) {
+        for (int j = 0; j < currentApp->videoKeywordCount; j++) {
+            if (mjpegFileList[i].indexOf(currentApp->videoKeywords[j]) >= 0) {
+                Serial.printf("Found wrap-around themed video: %s at index %d\n", mjpegFileList[i].c_str(), i);
+                return i;
+            }
+        }
+    }
+    
+    // Fallback to app's start video
+    Serial.printf("No other themed videos found, returning to start video: %s\n", currentApp->startVideoKeyword);
+    return findVideoIndex(currentApp->startVideoKeyword);
 }
 
 void loop()
@@ -422,13 +546,21 @@ void loop()
         // On home screen - just check for touch input
         checkTouch();
         delay(50);
-    } else {
-        // Playing videos
+    } else if (currentState == FACEBOOK_APP) {
+        // In static image app - just check for touch input
+        checkTouch();
+        delay(50);
+    } else if (currentState == SCIFI_VIDEO_APP || currentState == ANIMAL_VIDEO_APP || currentState == ACTION_VIDEO_APP) {
+        // In video player app - play videos
         playSelectedMjpeg(currentMjpegIndex);
         
         if (currentState != HOME_SCREEN) { // Don't advance if we returned to home
             currentMjpegIndex = getNextVideoIndex(currentMjpegIndex);
         }
+    } else {
+        // Unknown state - return to home
+        Serial.println("Unknown app state, returning to home");
+        returnToHome();
     }
 }
 

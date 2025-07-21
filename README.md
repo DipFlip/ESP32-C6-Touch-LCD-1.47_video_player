@@ -1,37 +1,77 @@
-# ESP32-C6 Touch LCD 1.47" Video Player
+# ESP32-C6 Touch LCD 1.47" Phone Interface
 
-Touch-enabled video player for the ESP32-C6 Touch LCD 1.47" display.
+Touch-enabled phone interface mockup for the ESP32-C6 Touch LCD 1.47" display.
 
 ## Features
 
-- **Home Screen**: Displays image from SD card with touch buttons
-- **Two Video Modes**: 
-  - Alien Eye mode (sci-fi themed videos)
-  - Cheetah mode (animal/nature themed videos)
-- **Smart Video Progression**: Automatically selects related videos based on chosen mode
-- **Touch Controls**: Intuitive touch interface for navigation
-- **Return to Home**: Touch top area during video to return to home screen
-- **MJPEG video playback** from SD card
-- **Performance statistics** output
+- **Phone-Style Home Screen**: 2x2 grid with 4 app icons
+- **Multiple App Types**: 
+  - Static Image Apps (Facebook)
+  - Video Player Apps (Sci-Fi, Animals, Action)
+  - Extensible for future apps (games, etc.)
+- **Pre-designed Home Screen**: Uses composite image with background and icons
+- **Smart Video Progression**: Each video app has themed playlists
+- **Touch Navigation**: Tap apps to launch, touch top to return home
+- **Professional UI**: Clean interface with app names and return indicators
 
 ## Hardware Requirements
 
 - ESP32-C6 Touch LCD 1.47" display
-- MicroSD card with MJPEG videos and home screen image
+- MicroSD card with videos and images
 - **Required SD card structure**:
-  - `/mjpeg/` folder with MJPEG videos
-  - `/images/image_1.jpg` for home screen background
+  - `/mjpeg/` - MJPEG video files
+  - `/images/app-select-screen.jpg` - Complete home screen with background and app icons
+  - `/images/image_1.jpg` - Fallback wallpaper (if app-select-screen.jpg not found)
+  - `/facebook-app.jpg` - Facebook app content image
+  - `/logos/` - Individual app icons (fallback only)
 
 ## Touch Controls
 
 ### On Home Screen:
-- **Tap TOP area (green)**: Start Alien Eye mode (sci-fi videos)
-- **Tap BOTTOM area (yellow)**: Start Cheetah mode (animal/nature videos)
+- **Tap Top-Left**: Launch Facebook app (static image)
+- **Tap Top-Right**: Launch Sci-Fi video app (alien, space themes)
+- **Tap Bottom-Left**: Launch Animals video app (catmeow, nature themes)
+- **Tap Bottom-Right**: Launch Action video app (gundam, action themes)
 
-### During Video Playback:
-- **Tap TOP area**: Return to home screen  
-- **Tap anywhere else**: Skip to next related video
-- Videos automatically progress through themed playlists
+### In Apps:
+- **Facebook App**: Touch anywhere to return to home screen
+- **Video Apps**: 
+  - Touch top area to return to home screen
+  - Touch anywhere else to skip to next themed video
+  - Videos automatically progress through app's playlist
+
+## App System
+
+### Static Image Apps
+- Display a single image from SD card
+- Simple touch-to-return interface
+- Perfect for mockup content like social media feeds
+
+### Video Player Apps  
+- Each app has its own themed video playlist
+- Smart progression through related videos
+- Touch controls for navigation and return
+
+### Future App Types (Extensible)
+- **Game Apps**: Add game logic with touch controls
+- **Settings Apps**: Configuration screens
+- **Utility Apps**: Calculator, clock, etc.
+- Easy to add new apps by modifying the `apps[]` array
+
+## Code Structure
+
+### App Definition
+Each app is defined in the `apps[]` array with:
+```cpp
+{"App Name", "icon_path", APP_STATE, APP_TYPE, "static_image", "start_video", {...keywords}, keyword_count}
+```
+
+### Adding New Apps
+1. Add new AppState enum value
+2. Add app definition to apps[] array  
+3. Add app icon to /logos/ folder
+4. Handle new state in main loop
+5. Implement app-specific logic
 
 ## Pin Configuration (Touch Version)
 
