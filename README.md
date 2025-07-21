@@ -4,29 +4,41 @@ Touch-enabled video player for the ESP32-C6 Touch LCD 1.47" display.
 
 ## Features
 
-- Touch control support
-- MJPEG video playback from SD card
-- Touch to skip to next video
-- Automatic video loop
-- Performance statistics output
+- **Home Screen**: Displays image from SD card with touch buttons
+- **Two Video Modes**: 
+  - Alien Eye mode (sci-fi themed videos)
+  - Cheetah mode (animal/nature themed videos)
+- **Smart Video Progression**: Automatically selects related videos based on chosen mode
+- **Touch Controls**: Intuitive touch interface for navigation
+- **Return to Home**: Touch top area during video to return to home screen
+- **MJPEG video playback** from SD card
+- **Performance statistics** output
 
 ## Hardware Requirements
 
 - ESP32-C6 Touch LCD 1.47" display
-- MicroSD card with MJPEG videos
-- MJPEG videos should be placed in `/mjpeg/` folder on the SD card
+- MicroSD card with MJPEG videos and home screen image
+- **Required SD card structure**:
+  - `/mjpeg/` folder with MJPEG videos
+  - `/images/image_1.jpg` for home screen background
 
 ## Touch Controls
 
-- **Tap anywhere**: Skip to next video
-- Videos automatically loop when reaching the end of the playlist
+### On Home Screen:
+- **Tap TOP area (green)**: Start Alien Eye mode (sci-fi videos)
+- **Tap BOTTOM area (yellow)**: Start Cheetah mode (animal/nature videos)
+
+### During Video Playback:
+- **Tap TOP area**: Return to home screen  
+- **Tap anywhere else**: Skip to next related video
+- Videos automatically progress through themed playlists
 
 ## Pin Configuration (Touch Version)
 
-- **Display SPI**: SCK=7, MOSI=6, MISO=5, CS=14, DC=15, RST=21
+- **Display SPI**: SCK=1, MOSI=2, MISO=3, CS=14, DC=15, RST=22
 - **Touch I2C**: SDA=18, SCL=19, RST=20, INT=21
 - **SD Card**: CS=4
-- **Backlight**: GPIO 22
+- **Backlight**: GPIO 23
 
 ## Dependencies
 

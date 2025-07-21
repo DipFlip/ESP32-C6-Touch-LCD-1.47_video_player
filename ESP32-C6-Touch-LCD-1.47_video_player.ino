@@ -1,5 +1,6 @@
 // Touch-enabled video player for ESP32-C6 Touch LCD 1.47"
 // Based on ESP32-C6-LCD-1.47_video_player adapted for touch version
+// Features: Home screen with image and touch buttons for video selection
 // Use board "ESP32C6 Dev Module"
 
 #include <Arduino_GFX_Library.h>
@@ -7,6 +8,7 @@
 #include "MjpegClass.h"
 #include "SD.h"
 #include "Arduino.h"
+#include "JpegFunc.h"
 
 #define GFX_BRIGHTNESS 255
 
@@ -53,6 +55,16 @@ bool isPaused = false;
 
 // Touch data
 touch_data_t touch_data;
+
+// App state management
+enum AppState {
+  HOME_SCREEN,
+  PLAYING_ALIEN_EYE,
+  PLAYING_CHEETAH
+};
+AppState currentState = HOME_SCREEN;
+
+// JPEG drawing callback for home screen image
 
 // Device initialization for touch version
 void DEV_DEVICE_INIT() {
@@ -200,15 +212,76 @@ void setup()
 
     loadMjpegFilesList();
 
-    // Display startup message with touch controls
-    displayTouchControls();
-    delay(3000);
+    // Show the home screen
+    Serial.println("Showing home screen");
+    showHomeScreen();
 }
 
 void setDisplayBrightness()
 {
     pinMode(GFX_BL, OUTPUT);
     digitalWrite(GFX_BL, HIGH);
+}
+
+// JPEG draw callback for home screen image
+int jpegDrawCallbackHomeScreen(JPEGDRAW *pDraw)
+{
+    gfx->draw16bitBeRGBBitmap(pDraw->x, pDraw->y, pDraw->pPixels, pDraw->iWidth, pDraw->iHeight);
+    return 1;
+}
+
+// Load and display home screen with image and buttons
+void showHomeScreen()
+{
+    gfx->fillScreen(RGB565_BLACK);
+    
+    // Try to load and display the image from SD card using proper Arduino_GFX method
+    File imageFile = SD.open("/images/image_1.jpg", "r");
+    if (imageFile) {
+        Serial.println("Loading home screen image...");
+        imageFile.close();
+        
+        // Use the jpegDraw function from JpegFunc.h (proper Arduino_GFX way)
+        jpegDraw("/images/image_1.jpg", jpegDrawCallbackHomeScreen, true /* useBigEndian */,
+                0 /* x */, 30 /* y */, gfx->width() /* widthLimit */, gfx->height() - 140 /* heightLimit */);
+    } else {
+        Serial.println("Image file not found, showing text-only home screen");
+        // Fallback to text-only home screen
+        gfx->setTextColor(RGB565_WHITE);
+        gfx->setTextSize(2);
+        gfx->setCursor(20, 80);
+        gfx->println("Video Player");
+    }
+    
+    // Draw button areas with labels
+    drawHomeScreenButtons();
+}
+
+void drawHomeScreenButtons()
+{
+    // Draw top button area (Alien Eye)
+    gfx->drawRect(10, 10, gfx->width() - 20, 60, RGB565_GREEN);
+    gfx->setTextColor(RGB565_GREEN);
+    gfx->setTextSize(1);
+    gfx->setCursor(15, 25);
+    gfx->println("TAP TOP: Alien Eye");
+    gfx->setCursor(15, 40);
+    gfx->println("(Sci-Fi Videos)");
+    
+    // Draw bottom button area (Cheetah)
+    gfx->drawRect(10, gfx->height() - 70, gfx->width() - 20, 60, RGB565_YELLOW);
+    gfx->setTextColor(RGB565_YELLOW);
+    gfx->setCursor(15, gfx->height() - 55);
+    gfx->println("TAP BOTTOM: Cheetah");
+    gfx->setCursor(15, gfx->height() - 40);
+    gfx->println("(Animal Videos)");
+    
+    // Instructions in middle
+    gfx->setTextColor(RGB565_WHITE);
+    gfx->setCursor(20, gfx->height()/2 + 40);
+    gfx->println("Touch screen areas");
+    gfx->setCursor(20, gfx->height()/2 + 55);
+    gfx->println("to select videos");
 }
 
 void displayTouchControls()
@@ -238,22 +311,102 @@ void checkTouch()
         uint32_t now = millis();
         if (now - lastTouch > 300) // 300ms debounce
         {
-            Serial.printf("Touch detected at: x=%d, y=%d\n", touch_data.coords[0].x, touch_data.coords[0].y);
+            int touchX = touch_data.coords[0].x;
+            int touchY = touch_data.coords[0].y;
+            Serial.printf("Touch detected at: x=%d, y=%d\n", touchX, touchY);
             
-            // Simple tap detection - skip to next video
-            skipRequested = true;
+            if (currentState == HOME_SCREEN) {
+                // Check which button was pressed
+                if (touchY <= 70) {
+                    // Top button - Alien Eye videos
+                    Serial.println("Starting Alien Eye videos");
+                    currentState = PLAYING_ALIEN_EYE;
+                    currentMjpegIndex = findVideoIndex("alien_eye.mjpeg");
+                } else if (touchY >= gfx->height() - 70) {
+                    // Bottom button - Cheetah videos  
+                    Serial.println("Starting Cheetah videos");
+                    currentState = PLAYING_CHEETAH;
+                    currentMjpegIndex = findVideoIndex("catmeow.mjpeg");
+                }
+            } else {
+                // During video playback - skip to next or return to home
+                if (touchY <= 50) {
+                    // Top area - return to home screen
+                    Serial.println("Returning to home screen");
+                    currentState = HOME_SCREEN;
+                    skipRequested = true;
+                } else {
+                    // Rest of screen - skip to next video
+                    skipRequested = true;
+                }
+            }
             lastTouch = now;
         }
     }
 }
 
+// Find index of specific video in the list
+int findVideoIndex(const char* filename)
+{
+    for (int i = 0; i < mjpegCount; i++) {
+        if (mjpegFileList[i].indexOf(filename) >= 0) {
+            return i;
+        }
+    }
+    return 0; // Default to first video if not found
+}
+
+// Get next video index based on current mode
+int getNextVideoIndex(int currentIndex)
+{
+    if (currentState == PLAYING_ALIEN_EYE) {
+        // Try to find next sci-fi themed video
+        const char* scifiVideos[] = {"alien", "death_star", "starfighter", "nova", "universe", "human_scan", "human_xray", "dna_helix"};
+        int scifiCount = sizeof(scifiVideos) / sizeof(scifiVideos[0]);
+        
+        for (int i = currentIndex + 1; i < mjpegCount; i++) {
+            for (int j = 0; j < scifiCount; j++) {
+                if (mjpegFileList[i].indexOf(scifiVideos[j]) >= 0) {
+                    return i;
+                }
+            }
+        }
+        // Loop back to find alien_eye
+        return findVideoIndex("alien_eye.mjpeg");
+        
+    } else if (currentState == PLAYING_CHEETAH) {
+        // Try to find next animal/nature themed video (starting with catmeow)
+        const char* animalVideos[] = {"catmeow", "cheetah", "turtle", "human_eye", "falls", "river", "earth_spin"};
+        int animalCount = sizeof(animalVideos) / sizeof(animalVideos[0]);
+        
+        for (int i = currentIndex + 1; i < mjpegCount; i++) {
+            for (int j = 0; j < animalCount; j++) {
+                if (mjpegFileList[i].indexOf(animalVideos[j]) >= 0) {
+                    return i;
+                }
+            }
+        }
+        // Loop back to find catmeow (first animal video)
+        return findVideoIndex("catmeow.mjpeg");
+    }
+    
+    // Default progression
+    return (currentIndex + 1) % mjpegCount;
+}
+
 void loop()
 {
-    playSelectedMjpeg(currentMjpegIndex);
-    currentMjpegIndex++;
-    if (currentMjpegIndex >= mjpegCount)
-    {
-        currentMjpegIndex = 0;
+    if (currentState == HOME_SCREEN) {
+        // On home screen - just check for touch input
+        checkTouch();
+        delay(50);
+    } else {
+        // Playing videos
+        playSelectedMjpeg(currentMjpegIndex);
+        
+        if (currentState != HOME_SCREEN) { // Don't advance if we returned to home
+            currentMjpegIndex = getNextVideoIndex(currentMjpegIndex);
+        }
     }
 }
 
@@ -324,6 +477,12 @@ void mjpegPlayFromSDCard(char *mjpegFilename)
         Serial.println(F("MJPEG end"));
         mjpegFile.close();
         skipRequested = false; // ready for next video
+        
+        // Check if we should return to home screen
+        if (currentState == HOME_SCREEN) {
+            showHomeScreen();
+            return;
+        }
         
         float fps = 1000.0 * total_frames / time_used;
         total_decode_video -= total_show_video;
