@@ -359,11 +359,13 @@ int findVideoIndex(const char* filename)
 // Get next video index based on current mode
 int getNextVideoIndex(int currentIndex)
 {
+    Serial.printf("Getting next video from index %d (current: %s)\n", currentIndex, mjpegFileList[currentIndex].c_str());
     if (currentState == PLAYING_ALIEN_EYE) {
         // Try to find next sci-fi themed video
         const char* scifiVideos[] = {"alien", "death_star", "starfighter", "nova", "universe", "human_scan", "human_xray", "dna_helix"};
         int scifiCount = sizeof(scifiVideos) / sizeof(scifiVideos[0]);
         
+        // First, search from current position + 1 to end
         for (int i = currentIndex + 1; i < mjpegCount; i++) {
             for (int j = 0; j < scifiCount; j++) {
                 if (mjpegFileList[i].indexOf(scifiVideos[j]) >= 0) {
@@ -371,22 +373,42 @@ int getNextVideoIndex(int currentIndex)
                 }
             }
         }
-        // Loop back to find alien_eye
-        return findVideoIndex("alien_eye.mjpeg");
-        
-    } else if (currentState == PLAYING_CHEETAH) {
-        // Try to find next animal/nature themed video (starting with catmeow)
-        const char* animalVideos[] = {"catmeow", "cheetah", "turtle", "human_eye", "falls", "river", "earth_spin"};
-        int animalCount = sizeof(animalVideos) / sizeof(animalVideos[0]);
-        
-        for (int i = currentIndex + 1; i < mjpegCount; i++) {
-            for (int j = 0; j < animalCount; j++) {
-                if (mjpegFileList[i].indexOf(animalVideos[j]) >= 0) {
+        // If not found, search from beginning to current position
+        for (int i = 0; i < currentIndex; i++) {
+            for (int j = 0; j < scifiCount; j++) {
+                if (mjpegFileList[i].indexOf(scifiVideos[j]) >= 0) {
                     return i;
                 }
             }
         }
-        // Loop back to find catmeow (first animal video)
+        // Fallback to alien_eye if nothing found
+        return findVideoIndex("alien_eye.mjpeg");
+        
+    } else if (currentState == PLAYING_CHEETAH) {
+        // Try to find next animal/nature themed video
+        const char* animalVideos[] = {"catmeow", "cheetah", "turtle", "human_eye", "falls", "river", "earth_spin"};
+        int animalCount = sizeof(animalVideos) / sizeof(animalVideos[0]);
+        
+        // First, search from current position + 1 to end
+        for (int i = currentIndex + 1; i < mjpegCount; i++) {
+            for (int j = 0; j < animalCount; j++) {
+                if (mjpegFileList[i].indexOf(animalVideos[j]) >= 0) {
+                    Serial.printf("Found next animal video: %s at index %d\n", mjpegFileList[i].c_str(), i);
+                    return i;
+                }
+            }
+        }
+        // If not found, search from beginning to current position
+        for (int i = 0; i < currentIndex; i++) {
+            for (int j = 0; j < animalCount; j++) {
+                if (mjpegFileList[i].indexOf(animalVideos[j]) >= 0) {
+                    Serial.printf("Found wrap-around animal video: %s at index %d\n", mjpegFileList[i].c_str(), i);
+                    return i;
+                }
+            }
+        }
+        // Fallback to catmeow if nothing found
+        Serial.println("No other animal videos found, returning to catmeow");
         return findVideoIndex("catmeow.mjpeg");
     }
     
